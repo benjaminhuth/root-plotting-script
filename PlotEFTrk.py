@@ -10,13 +10,15 @@ ROOT.gROOT.SetStyle("ATLAS")
 ROOT.gROOT.SetBatch()
 
 
-def isTEfficiency(obj):
-    return obj.InheritsFrom("TEfficiency")
+def isTEfficiency(obj, cfg):
+    print(cfg["histo_path"], "is eff", "eff" in cfg["histo_path"]) 
+    return "eff" in cfg["histo_path"]
+    # return obj.InheritsFrom("TEfficiency")
 
 
 def getLegend():
 
-    leg = ROOT.TLegend(0.9, 0.7, 0.65, 0.9)
+    leg = ROOT.TLegend(0.9, 0.7, 0.55, 0.9)
     leg.SetFillColor(0)
     leg.SetLineColor(0)
     leg.SetBorderSize(0)
@@ -70,6 +72,7 @@ def getCanvas(cfg):
 
 
 def setStyle(h, cfg):
+    print("set linecolor", cfg["linecolor"])
     h.SetLineColor(cfg["linecolor"])
     h.SetLineStyle(cfg["linestyle"])
     h.SetMarkerStyle(cfg["markstyle"])
@@ -77,7 +80,7 @@ def setStyle(h, cfg):
     h.SetMarkerSize(0.8)
     h.SetLineWidth(2)
 
-    if isTEfficiency(h):
+    if isTEfficiency(h, cfg):
         ROOT.gPad.Update()
         if "efficiency" in cfg["histo"]:
             h.GetPaintedGraph().SetMaximum(1.2 if cfg["ymax"] == 0 else cfg["ymax"])
@@ -261,27 +264,18 @@ def draw(args, configs, tails=False):
     histos = []
     canv.cd(1)
 
-    for i, cfg in enumerate(
-        configs
-    ):  # loop over the trkAnalysis to be compared (if single plot, there will be only 1 trkAnalysis)
+    # loop over the trkAnalysis to be compared (if single plot, there will be only 1 trkAnalysis)
+    for i, cfg in enumerate(configs):
         h = cfg["histo"]
-        isTEfficiencyObj = isTEfficiency(h)
+        isTEfficiencyObj = isTEfficiency(h, cfg)
         histos.append(h)
-        if not tails:
-            h.Draw("same" if i != 0 else "")
-        else:
-            h.Draw("sameHISTE" if i % 2 != 0 else "samePE")
+        h.Draw("same" if i != 0 else "")
 
         setStyle(h, cfg)
 
         if doComparison:
             draw_option = "lp"
-            if tails:
-                draw_option = "l" if i % 2 != 0 else "lp"
-                jet = "b-Jet" if i % 2 == 0 else "LF-Jet"
-                legend.AddEntry(h, f"{cfg['legend']} {jet}", draw_option)
-            else:
-                legend.AddEntry(h, cfg["legend"], draw_option)
+            legend.AddEntry(h, cfg["legend"], draw_option)
             legend.Draw()
 
     ATLASLabel.Draw()
@@ -291,136 +285,114 @@ def draw(args, configs, tails=False):
     ratios = []
     multigraph = ROOT.TMultiGraph()
 
-    if not tails:
-        for i in range(len(configs) - 1):
-            ratio_histos = [histos[0], histos[i + 1]]
-            if isTEfficiencyObj:
-                ratios.append(getTEfficiencyRatio(ratio_histos))
-            else:
-                ratio = (
-                    ratio_histos[1].ProjectionX().Clone()
-                    if "avgNum" in ratio_histos[0].GetName()
-                    else ratio_histos[1].Clone()
-                )
-                ratio.Divide(ratio_histos[0])
-                ratios.append(ratio)
-
-        for i, ratio in enumerate(ratios):
-            color = configs[i + 1]["linecolor"] if len(configs) > 2 else ROOT.kBlack
-            linestyle = configs[i + 1]["linestyle"] if len(configs) > 2 else 1
-            markstyle = configs[i + 1]["markstyle"] if len(configs) > 2 else 20
-            setRatioStyle(ratio, configs[i], color, linestyle, markstyle)
-            if isTEfficiencyObj:
-                multigraph.Add(ratio, "p")
-            else:
-                ratio.Draw("same")
+    for i in range(len(configs) - 1):
+        ratio_histos = [histos[0], histos[i + 1]]
         if isTEfficiencyObj:
-            xmin, xmax = ratios[0].GetXaxis().GetXmin(), ratios[0].GetXaxis().GetXmax()
-            title = multigraph.GetXaxis().SetTitle(ratios[0].GetXaxis().GetTitle())
-            setRatioStyle(
-                multigraph, configs[i], color, linestyle, markstyle, multigraph=True
-            )
-
-            markers = []
-            multigraph.Draw("a")
-            outliers_index = 0
-            for j, g in enumerate(multigraph.GetListOfGraphs()):
-                ROOT.gPad.Update()
-                ymin = ROOT.gPad.GetFrame().GetY1()
-                ymax = ROOT.gPad.GetFrame().GetY2()
-                for i in range(g.GetN()):
-                    if g.GetPointY(i) > ymax:
-                        markers.append(
-                            ROOT.TMarker(
-                                g.GetPointX(i), ymax - (ymax - ymin) * 0.05, 26
-                            )
-                        )
-                        markers[outliers_index].SetMarkerColor(
-                            configs[j + 1]["linecolor"]
-                        )
-                        markers[outliers_index].SetMarkerSize(1.2)
-                        markers[outliers_index].Draw("same")
-                        outliers_index += 1
-                    if g.GetPointY(i) < ymin and g.GetPointY(i) > 0:
-                        markers.append(
-                            ROOT.TMarker(
-                                g.GetPointX(i), ymin + (ymax - ymin) * 0.05, 32
-                            )
-                        )
-                        markers[outliers_index].SetMarkerColor(
-                            configs[j + 1]["linecolor"]
-                        )
-                        markers[outliers_index].SetMarkerSize(1.2)
-                        markers[outliers_index].Draw("same")
-                        outliers_index += 1
-
-            multigraph.GetXaxis().SetLimits(xmin, xmax)
+            ratios.append(getTEfficiencyRatio(ratio_histos))
         else:
-
-            markers = []
-            outliers_index = 0
-            for j, ratio in enumerate(ratios):
-                ROOT.gPad.Update()
-                ymin = ROOT.gPad.GetFrame().GetY1()
-                ymax = ROOT.gPad.GetFrame().GetY2()
-                for i in range(ratio.GetNbinsX()):
-                    if ratio.GetBinContent(i) > ymax:
-                        markers.append(
-                            ROOT.TMarker(
-                                ratio.GetXaxis().GetBinCenter(i),
-                                ymax - (ymax - ymin) * 0.05,
-                                26,
-                            )
-                        )
-                        markers[outliers_index].SetMarkerColor(
-                            configs[j + 1]["linecolor"]
-                        )
-                        markers[outliers_index].SetMarkerSize(1.2)
-                        markers[outliers_index].Draw("same")
-                        outliers_index += 1
-                    if ratio.GetBinContent(i) < ymin and ratio.GetBinContent(i) > 0:
-                        markers.append(
-                            ROOT.TMarker(
-                                ratio.GetXaxis().GetBinCenter(i),
-                                ymin + (ymax - ymin) * 0.05,
-                                32,
-                            )
-                        )
-                        markers[outliers_index].SetMarkerColor(
-                            configs[j + 1]["linecolor"]
-                        )
-                        markers[outliers_index].SetMarkerSize(1.2)
-                        markers[outliers_index].Draw("same")
-                        outliers_index += 1
-
-        refline = ROOT.TLine(
-            ratios[0].GetXaxis().GetXmin(), 1, ratios[0].GetXaxis().GetXmax(), 1
-        )
-        refline.SetLineStyle(2)
-        refline.SetLineColor(ROOT.kBlack)
-        refline.SetLineWidth(1)
-        refline.Draw("same")
-    else:
-        for i in [0, 2]:
-            ratio_histos = [histos[i], histos[i + 1]]
-            ratio = ratio_histos[0].Clone()
-            ratio.Divide(ratio_histos[1])
+            ratio = (
+                ratio_histos[1].ProjectionX().Clone()
+                if "avgNum" in ratio_histos[0].GetName()
+                else ratio_histos[1].Clone()
+            )
+            ratio.Divide(ratio_histos[0])
             ratios.append(ratio)
-        for i, ratio in enumerate(ratios):
-            color = configs[i * 2]["linecolor"]
-            linestyle = configs[i * 2]["linestyle"]
-            markstyle = configs[i * 2]["markstyle"]
-            setRatioStyle(ratio, configs[i], color, linestyle, markstyle)
-            ratio.GetYaxis().SetTitle("b-Jet / LF-Jet")
-            ratio.Draw("same")
 
-        refline = ROOT.TLine(
-            ratios[0].GetXaxis().GetXmin(), 1, ratios[0].GetXaxis().GetXmax(), 1
+    for i, ratio in enumerate(ratios):
+        color = configs[i + 1]["linecolor"] if len(configs) > 2 else ROOT.kBlack
+        linestyle = configs[i + 1]["linestyle"] if len(configs) > 2 else 1
+        markstyle = configs[i + 1]["markstyle"] if len(configs) > 2 else 20
+        setRatioStyle(ratio, configs[i], color, linestyle, markstyle)
+        if isTEfficiencyObj:
+            multigraph.Add(ratio, "p")
+        else:
+            ratio.Draw("same")
+    if isTEfficiencyObj:
+        xmin, xmax = ratios[0].GetXaxis().GetXmin(), ratios[0].GetXaxis().GetXmax()
+        title = multigraph.GetXaxis().SetTitle(ratios[0].GetXaxis().GetTitle())
+        setRatioStyle(
+            multigraph, configs[i], color, linestyle, markstyle, multigraph=True
         )
-        refline.SetLineStyle(2)
-        refline.SetLineColor(ROOT.kBlack)
-        refline.SetLineWidth(1)
-        refline.Draw()
+
+        markers = []
+        multigraph.Draw("a")
+        outliers_index = 0
+        for j, g in enumerate(multigraph.GetListOfGraphs()):
+            ROOT.gPad.Update()
+            ymin = ROOT.gPad.GetFrame().GetY1()
+            ymax = ROOT.gPad.GetFrame().GetY2()
+            for i in range(g.GetN()):
+                if g.GetPointY(i) > ymax:
+                    markers.append(
+                        ROOT.TMarker(
+                            g.GetPointX(i), ymax - (ymax - ymin) * 0.05, 26
+                        )
+                    )
+                    markers[outliers_index].SetMarkerColor(
+                        configs[j + 1]["linecolor"]
+                    )
+                    markers[outliers_index].SetMarkerSize(1.2)
+                    markers[outliers_index].Draw("same")
+                    outliers_index += 1
+                if g.GetPointY(i) < ymin and g.GetPointY(i) > 0:
+                    markers.append(
+                        ROOT.TMarker(
+                            g.GetPointX(i), ymin + (ymax - ymin) * 0.05, 32
+                        )
+                    )
+                    markers[outliers_index].SetMarkerColor(
+                        configs[j + 1]["linecolor"]
+                    )
+                    markers[outliers_index].SetMarkerSize(1.2)
+                    markers[outliers_index].Draw("same")
+                    outliers_index += 1
+
+        multigraph.GetXaxis().SetLimits(xmin, xmax)
+    else:
+
+        markers = []
+        outliers_index = 0
+        for j, ratio in enumerate(ratios):
+            ROOT.gPad.Update()
+            ymin = ROOT.gPad.GetFrame().GetY1()
+            ymax = ROOT.gPad.GetFrame().GetY2()
+            for i in range(ratio.GetNbinsX()):
+                if ratio.GetBinContent(i) > ymax:
+                    markers.append(
+                        ROOT.TMarker(
+                            ratio.GetXaxis().GetBinCenter(i),
+                            ymax - (ymax - ymin) * 0.05,
+                            26,
+                        )
+                    )
+                    markers[outliers_index].SetMarkerColor(
+                        configs[j + 1]["linecolor"]
+                    )
+                    markers[outliers_index].SetMarkerSize(1.2)
+                    markers[outliers_index].Draw("same")
+                    outliers_index += 1
+                if ratio.GetBinContent(i) < ymin and ratio.GetBinContent(i) > 0:
+                    markers.append(
+                        ROOT.TMarker(
+                            ratio.GetXaxis().GetBinCenter(i),
+                            ymin + (ymax - ymin) * 0.05,
+                            32,
+                        )
+                    )
+                    markers[outliers_index].SetMarkerColor(
+                        configs[j + 1]["linecolor"]
+                    )
+                    markers[outliers_index].SetMarkerSize(1.2)
+                    markers[outliers_index].Draw("same")
+                    outliers_index += 1
+
+    refline = ROOT.TLine(
+        ratios[0].GetXaxis().GetXmin(), 1, ratios[0].GetXaxis().GetXmax(), 1
+    )
+    refline.SetLineStyle(2)
+    refline.SetLineColor(ROOT.kBlack)
+    refline.SetLineWidth(1)
+    refline.Draw("same")
 
     filename = args["output"] / (Path(cfg["histo_path"]).name + ".pdf")
     canv.SaveAs(str(filename))
@@ -457,6 +429,17 @@ def main(config):
     args["mu"] = common_loaded.get("mu", "200")
     args["output"] = Path(common_loaded.get("output", "."))
 
+    open_files = []
+    for fdesc in full_loaded["files"]:
+        fname = fdesc["filename"]
+        assert Path(fname).exists(), f"{fname} does not exist"
+        open_files.append({
+            "file": ROOT.TFile.Open(fname, "READ"),
+            "filename": fname,
+            "legend": fdesc["legend"]
+        })
+        print(f"Process file {fdesc['filename']}")
+
     args["output"].mkdir(parents=True, exist_ok=True)
 
     for loaded in full_loaded["plots"]:
@@ -469,21 +452,29 @@ def main(config):
         fixed_config["ratioyrange"] = loaded.get("ratioyrange", [0.9, 1.1])
         fixed_config["norm"] = loaded.get("norm", False)
 
+        print("Do", fixed_config["histo_path"])
         configs = []
 
-        for i, fdesc in enumerate(full_loaded["files"]):
-            fname = fdesc["filename"]
-            f = ROOT.TFile.Open(fname, "READ")
+        for i, fdesc in enumerate(open_files):
+            h = fdesc["file"].Get(fixed_config["histo_path"])
+            if "ntracks_vs_" in fixed_config["histo_path"]:
+                hh = h.ProfileX(fdesc["filename"]+"+"+fixed_config["histo_path"])
+                hh.GetYaxis().SetTitle(h.GetYaxis().GetTitle())
+            else:
+                hh = h
+            
             configs.append({
                 **fixed_config,
-                "input": fname,
-                "histo": f.Get(fixed_config["histo_path"]),
+                "input": fdesc["filename"],
+                "histo": hh,
                 "legend": fdesc["legend"],
                 "linestyle": linestyles[i],
                 "linecolor": colors[i],
                 "markstyle": markstyles[i],
                 "markcolor": colors[i],
+                "tmp": h,
             })
+
 
         draw(args, configs)
 
