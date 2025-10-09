@@ -86,7 +86,7 @@ def setStyle(h, cfg):
         else:
             if "y" in str(cfg["log"]):
                 h.GetPaintedGraph().SetMaximum(
-                    10
+                    100
                     * max(1, abs(math.log10(max(h.GetPaintedGraph().GetY()))))
                     * max(h.GetPaintedGraph().GetY())
                     if cfg["ymax"] == 0
@@ -116,7 +116,7 @@ def setStyle(h, cfg):
         else:
             if "y" in str(cfg["log"]):
                 h.SetMaximum(
-                    1.5
+                    100
                     * max(1, max(1, abs(math.log10(h.GetMaximum()))))
                     * h.GetMaximum()
                     if cfg["ymax"] == 0
@@ -136,6 +136,9 @@ def setStyle(h, cfg):
         h.GetXaxis().SetLabelSize(0)
         h.GetYaxis().SetLabelSize(0.05)
         h.GetYaxis().SetTitleSize(0.05)
+
+    if "xrange" in cfg:
+        h.GetXaxis().SetLimits(*cfg["xrange"])
 
 
 def setRatioStyle(ratio, cfg, color, linestyle, markstyle, multigraph=False):
@@ -177,6 +180,9 @@ def setRatioStyle(ratio, cfg, color, linestyle, markstyle, multigraph=False):
         ratio.SetMarkerStyle(markstyle)
         ratio.SetMarkerColor(color)
         ratio.SetMarkerSize(0.8)
+    
+    if "xrange" in cfg:
+        ratio.GetXaxis().SetLimits(*cfg["xrange"])
 
 
 def getTEfficiencyRatio(histos):
