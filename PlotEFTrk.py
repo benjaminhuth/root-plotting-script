@@ -17,11 +17,11 @@ def isTEfficiency(obj, cfg):
 
 def getLegend():
 
-    leg = ROOT.TLegend(0.9, 0.7, 0.55, 0.9)
+    leg = ROOT.TLegend(x1=0.9, y1=0.7, x2=0.60, y2=0.9)
     leg.SetFillColor(0)
     leg.SetLineColor(0)
     leg.SetBorderSize(0)
-    leg.SetTextSize(0.05)
+    leg.SetTextSize(0.03)
     leg.SetTextFont(42)
     leg.SetLineWidth(2)
 
@@ -35,7 +35,7 @@ def getATLASLabel(args):
     subatlas = ROOT.TLatex(
         0.2,
         0.84,
-        "#splitline{#bf{#it{ATLAS}} Simulation Internal}{#splitline{#sqrt{s} = 14 TeV, HL-LHC}{#splitline{ITk Layout: 03-00-01}{<#mu> = %s, %s}}}"
+        "#splitline{#bf{#it{ATLAS}} Simulation Internal}{#splitline{#sqrt{s} = 14 TeV, HL-LHC}{#splitline{ITk Layout: 03-00-01}{#LT#mu#GT = %s, %s}}}"
         % (mu, sample),
     )
     subatlas.SetNDC(1)
