@@ -11,7 +11,6 @@ ROOT.gROOT.SetBatch()
 
 
 def isTEfficiency(obj, cfg):
-    print(cfg["histo_path"], "is eff", "eff" in cfg["histo_path"]) 
     return "eff" in cfg["histo_path"]
     # return obj.InheritsFrom("TEfficiency")
 
@@ -72,7 +71,6 @@ def getCanvas(cfg):
 
 
 def setStyle(h, cfg):
-    print("set linecolor", cfg["linecolor"])
     h.SetLineColor(cfg["linecolor"])
     h.SetLineStyle(cfg["linestyle"])
     h.SetMarkerStyle(cfg["markstyle"])
