@@ -400,6 +400,18 @@ def draw(args, configs, tails=False):
     canv.SaveAs(str(filename))
 
 
+class Loader(yaml.SafeLoader):
+    def __init__(self, stream):
+        super(Loader, self).__init__(stream)
+        self.root = Path(stream.name).parent
+
+    def include(self, node):
+        filename = self.root / self.construct_scalar(node)
+        with open(filename, 'r') as f:
+            return yaml.load(f, Loader)
+
+
+
 @click.command()
 @click.argument("config")
 def main(config):
@@ -418,9 +430,11 @@ def main(config):
     linestyles = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     markstyles = [20, 21, 22, 23, 24, 25, 26, 27, 28, 30]
 
+    Loader.add_constructor('!include', Loader.include)
+
     # Read fixed config from yaml
     with open(config, "r") as f:
-        full_loaded = yaml.safe_load(f)
+        full_loaded = yaml.load(f, Loader)
     
     assert len(full_loaded["files"]) >= 1
     assert len(full_loaded["plots"]) >= 1
@@ -444,41 +458,44 @@ def main(config):
 
     args["output"].mkdir(parents=True, exist_ok=True)
 
-    for loaded in full_loaded["plots"]:
-        fixed_config = {}
+    for plot_collection in [ k for k in full_loaded.keys() if "plots" in k ]:
+        print(f"Load plot collection '{plot_collection}'")
+        for loaded in full_loaded[plot_collection]:
+            fixed_config = {}
 
-        fixed_config["histo_path"] = loaded["histo_path"]
-        fixed_config["log"] = loaded.get("log", False)
-        fixed_config["ymax"] = loaded.get("ymax", 1.0)
-        fixed_config["ymin"] = loaded.get("ymin", 0.0)
-        fixed_config["ratioyrange"] = loaded.get("ratioyrange", [0.9, 1.1])
-        fixed_config["norm"] = loaded.get("norm", False)
+            fixed_config["histo_path"] = loaded["histo_path"]
+            fixed_config["log"] = loaded.get("log", False)
+            fixed_config["ymax"] = loaded.get("ymax", 0.0)
+            fixed_config["ymin"] = loaded.get("ymin", 0.0)
+            fixed_config["ratioyrange"] = loaded.get("ratioyrange", [0.9, 1.1])
+            fixed_config["norm"] = loaded.get("norm", False)
+            fixed_config["log"] = loaded.get("log", "")
 
-        print("Do", fixed_config["histo_path"])
-        configs = []
+            print("Do", fixed_config["histo_path"])
+            configs = []
 
-        for i, fdesc in enumerate(open_files):
-            h = fdesc["file"].Get(fixed_config["histo_path"])
-            if "ntracks_vs_" in fixed_config["histo_path"]:
-                hh = h.ProfileX(fdesc["filename"]+"+"+fixed_config["histo_path"])
-                hh.GetYaxis().SetTitle(h.GetYaxis().GetTitle())
-            else:
-                hh = h
-            
-            configs.append({
-                **fixed_config,
-                "input": fdesc["filename"],
-                "histo": hh,
-                "legend": fdesc["legend"],
-                "linestyle": linestyles[i],
-                "linecolor": colors[i],
-                "markstyle": markstyles[i],
-                "markcolor": colors[i],
-                "tmp": h,
-            })
+            for i, fdesc in enumerate(open_files):
+                h = fdesc["file"].Get(fixed_config["histo_path"])
+                if "profile_x" in loaded and loaded["profile_x"] is True:
+                    print(f"Apply '.ProfileX()' for '{fixed_config['histo_path']}'")
+                    hh = h.ProfileX(fdesc["filename"]+"+"+fixed_config["histo_path"])
+                    hh.GetYaxis().SetTitle(h.GetYaxis().GetTitle())
+                else:
+                    hh = h
 
+                configs.append({
+                    **fixed_config,
+                    "input": fdesc["filename"],
+                    "histo": hh,
+                    "legend": fdesc["legend"],
+                    "linestyle": linestyles[i],
+                    "linecolor": colors[i],
+                    "markstyle": markstyles[i],
+                    "markcolor": colors[i],
+                    "tmp": h,
+                })
 
-        draw(args, configs)
+            draw(args, configs)
 
 
 if __name__ == "__main__":
