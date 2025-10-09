@@ -127,8 +127,6 @@ def setStyle(h, cfg):
                     if cfg["ymin"] == 0
                     else cfg["ymin"]
                 )
-                if "avgNum" in cfg["histo"]:
-                    h.SetMinimum(100 if cfg["ymin"] == 0 else cfg["ymin"])
             else:
                 h.SetMaximum(1.4 * h.GetMaximum() if cfg["ymax"] == 0 else cfg["ymax"])
                 h.SetMinimum(0 if cfg["ymin"] == 0 else cfg["ymin"])
