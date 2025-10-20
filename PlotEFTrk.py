@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 import click
 import yaml
+import copy
 
 ROOT.gROOT.SetStyle("ATLAS")
 ROOT.gROOT.SetBatch()
@@ -15,13 +16,14 @@ def isTEfficiency(obj, cfg):
     # return obj.InheritsFrom("TEfficiency")
 
 
-def getLegend():
+def getLegend(args):
+    x2 = args.get("legend_x2", 0.6)
 
-    leg = ROOT.TLegend(x1=0.9, y1=0.7, x2=0.60, y2=0.9)
+    leg = ROOT.TLegend(x1=0.9, y1=0.7, x2=x2, y2=0.9)
     leg.SetFillColor(0)
     leg.SetLineColor(0)
     leg.SetBorderSize(0)
-    leg.SetTextSize(0.03)
+    leg.SetTextSize(0.04)
     leg.SetTextFont(42)
     leg.SetLineWidth(2)
 
@@ -32,11 +34,12 @@ def getATLASLabel(args):
 
     sample = args["sample"]
     mu = args["mu"]
+    layout = args["itk_layout"] 
     subatlas = ROOT.TLatex(
         0.2,
         0.84,
-        "#splitline{#bf{#it{ATLAS}} Simulation Internal}{#splitline{#sqrt{s} = 14 TeV, HL-LHC}{#splitline{ITk Layout: 03-00-01}{#LT#mu#GT = %s, %s}}}"
-        % (mu, sample),
+        "#splitline{#bf{#it{ATLAS}} Simulation Internal}{#splitline{#sqrt{s} = 14 TeV, HL-LHC}{#splitline{ITk Layout: %s}{#LT#mu#GT = %s, %s}}}"
+        % (layout, mu, sample),
     )
     subatlas.SetNDC(1)
     subatlas.SetTextFont(42)
@@ -46,7 +49,7 @@ def getATLASLabel(args):
 
 def getCanvas(cfg):
 
-    canv = ROOT.TCanvas("c", "c", 600, 600)
+    canv = ROOT.TCanvas("c", "c", ww=600, wh=350)
     canv.cd()
     pad1 = ROOT.TPad("pad1", "pad1", 0, 0.35, 1, 1)
     pad1.SetNumber(1)
@@ -136,7 +139,7 @@ def setStyle(h, cfg):
         h.GetYaxis().SetTitleSize(0.05)
 
     if "xrange" in cfg:
-        h.GetXaxis().SetLimits(*cfg["xrange"])
+        h.GetXaxis().SetRangeUser(*cfg["xrange"])
 
 
 def setRatioStyle(ratio, cfg, color, linestyle, markstyle, multigraph=False):
@@ -180,7 +183,7 @@ def setRatioStyle(ratio, cfg, color, linestyle, markstyle, multigraph=False):
         ratio.SetMarkerSize(0.8)
     
     if "xrange" in cfg:
-        ratio.GetXaxis().SetLimits(*cfg["xrange"])
+        ratio.GetXaxis().SetRangeUser(*cfg["xrange"])
 
 
 def getTEfficiencyRatio(histos):
@@ -260,7 +263,7 @@ def getTEfficiencyRatio(histos):
 def draw(args, configs, tails=False):
     canv = getCanvas(configs[0])
     ATLASLabel = getATLASLabel(args)
-    legend = getLegend()
+    legend = getLegend(args)
     doComparison = len(configs) > 1
     isTEfficiencyObj = False
     histos = []
@@ -443,7 +446,9 @@ def main(config):
     common_loaded = full_loaded["common"] if "common" in full_loaded else {}
     args["sample"] = common_loaded.get("sample", "ttbar")
     args["mu"] = common_loaded.get("mu", "200")
+    args["itk_layout"] = common_loaded.get("itk_layout", "<layout>")
     args["output"] = Path(common_loaded.get("output", "."))
+    args["legend_x2"] = common_loaded.get("legend_x2", 0.6)
 
     open_files = []
     for fdesc in full_loaded["files"]:
@@ -459,6 +464,7 @@ def main(config):
     args["output"].mkdir(parents=True, exist_ok=True)
 
     for plot_collection in [ k for k in full_loaded.keys() if "plots" in k ]:
+
         print(f"Load plot collection '{plot_collection}'")
         for loaded in full_loaded[plot_collection]:
             fixed_config = {}
@@ -470,12 +476,22 @@ def main(config):
             fixed_config["ratioyrange"] = loaded.get("ratioyrange", [0.9, 1.1])
             fixed_config["norm"] = loaded.get("norm", False)
             fixed_config["log"] = loaded.get("log", "")
+            if "xrange" in loaded:
+                fixed_config["xrange"] = loaded["xrange"]
+
+            plot_args = copy.deepcopy(args)
+            plot_args["sample"] += loaded.get("sample_text", "")
 
             print("Do", fixed_config["histo_path"])
             configs = []
 
             for i, fdesc in enumerate(open_files):
                 h = fdesc["file"].Get(fixed_config["histo_path"])
+                
+                if "rebin" in loaded:
+                    print(f"Apply rebin {loaded['rebin']} for '{fixed_config['histo_path']}'")
+                    h.Rebin(loaded["rebin"])
+
                 if "profile_x" in loaded and loaded["profile_x"] is True:
                     print(f"Apply '.ProfileX()' for '{fixed_config['histo_path']}'")
                     hh = h.ProfileX(fdesc["filename"]+"+"+fixed_config["histo_path"])
@@ -495,7 +511,7 @@ def main(config):
                     "tmp": h,
                 })
 
-            draw(args, configs)
+            draw(plot_args, configs)
 
 
 if __name__ == "__main__":
